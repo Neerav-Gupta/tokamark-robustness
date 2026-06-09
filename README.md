@@ -27,11 +27,12 @@ We evaluate three model architectures (XGBoost, LSTM, Transformer) across six ph
 
 ## Figures
 
-| | |
-|---|---|
-| ![Fig 1](plots/fig1_degradation_curves.png) | ![Fig 2](plots/fig2_channel_importance.png) |
-| ![Fig 3](plots/fig3_correlated_failure.png) | ![Fig 4](plots/fig4_proximate_comparison.png) |
-| ![Fig 5](plots/fig5_mitigation_effectiveness.png) | ![Fig 6](plots/fig6_robustness_scores.png) |
+![Fig 1](plots/fig1_degradation_curves.png) 
+![Fig 2](plots/fig2_channel_importance.png)
+![Fig 3](plots/fig3_correlated_failure.png)
+![Fig 4](plots/fig4_proximate_comparison.png)
+![Fig 5](plots/fig5_mitigation_effectiveness.png)
+![Fig 6](plots/fig6_robustness_scores.png)
 
 ## Repository Structure
 
