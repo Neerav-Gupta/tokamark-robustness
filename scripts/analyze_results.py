@@ -1,9 +1,22 @@
+"""
+Generate all publication figures from saved experiment results.
+
+Loads xgboost_results.json, lstm_results.json, and transformer_results.json
+from RESULTS_DIR and produces six figures saved as both PDF and PNG:
+
+    fig1_degradation_curves     — NRMSE vs corruption severity (3 scenarios)
+    fig2_channel_importance     — heatmap of per-category ablation degradation
+    fig3_correlated_failure     — bar chart of correlated group failure
+    fig4_proximate_comparison   — front gap vs pre-event vs proximate failure
+    fig5_mitigation_effectiveness — mitigation strategy comparison by model
+    fig6_robustness_scores      — overall Robustness Score bar chart
+"""
+
 import json
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from matplotlib.gridspec import GridSpec
 
 RESULTS_DIR = "/workspace/fusion_research/results"
 PLOTS_DIR = "/workspace/fusion_research/plots"
