@@ -1,7 +1,7 @@
 # Benchmarking Sensor Robustness in Plasma Diagnostic Models
 
 **Author:** Neerav Gupta  
-**Paper:** Preprint available on [GitHub](https://github.com/Neerav-Gupta/tokamark-robustness/blob/main/paper/main.pdf)
+**Paper:** Preprint available on [GitHub](https://github.com/Neerav-Gupta/tokamark-robustness/blob/main/paper/main.pdf)\
 **Data & Checkpoints:** [HuggingFace Dataset](https://huggingface.co/datasets/Neerav-Gupta/tokamark-robustness-data)
 
 ## Overview
