@@ -11,16 +11,13 @@ Output files (saved to DATA_DIR):
     feature_names.json         — feature name strings for X_feat columns
 """
 
-import sys
 import os
 import json
 import pickle
 import numpy as np
 from tqdm import tqdm
 
-sys.path.insert(0, "/workspace/tokamark/src")
-
-from config import RANDOM_SEED, STORE_SETTINGS, TASK_NAME
+from config import RANDOM_SEED
 from data_loader import get_splits, get_dataset
 from feature_engineering import extract_features
 

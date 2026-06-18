@@ -18,13 +18,13 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
 sys.path.insert(0, "/workspace/tokamark/src")
 
 from config import (
     RANDOM_SEED, RESULTS_DIR, CHECKPOINTS_DIR,
-    DROP_RATES, GAP_FRACTIONS, N_CHANNELS_TO_KILL, CORRELATED_GROUPS
+    DROP_RATES, GAP_FRACTIONS, N_CHANNELS_TO_KILL
 )
 from data_loader import load_saved_data
 from train_lstm import TokaTensorDataset, nrmse
@@ -139,6 +139,10 @@ class PlasmaCNN(nn.Module):
 # ─────────────────────────────────────────
 
 def train_clean_model(X_train, y_train, X_val, y_val, n_channels, input_len):
+    """
+    Train CNN baseline on clean data with early stopping on validation NRMSE.
+    Saves best checkpoint to disk. Returns (model, best_val_nrmse).
+    """
     print(f"\nTraining CNN baseline — channels: {n_channels}, "
           f"input_len: {input_len}, device: {DEVICE}")
 
@@ -212,7 +216,7 @@ def train_clean_model(X_train, y_train, X_val, y_val, n_channels, input_len):
     ckpt_path = os.path.join(CHECKPOINTS_DIR, "cnn_clean.pt")
     torch.save({
         "model_state":    best_state,
-        "n_channels":     n_chatnnels,
+        "n_channels":     n_channels,
         "input_len":      input_len,
         "backbone_hidden": 64,
     }, ckpt_path)

@@ -71,21 +71,22 @@ diagnostics fail regularly—acquisition systems start late, individual
 sensors die, and signal dropouts cluster precisely when a plasma disruption
 is approaching. We present the first systematic robustness benchmark for
 plasma diagnostic ML using the TokaMark dataset of 11,573 MAST
-shots~\cite{rousseau2026tokamark}, evaluating XGBoost, LSTM, and
-Transformer models across six physically-grounded failure scenarios and
-three imputation strategies. We also introduce the Robustness Score (RS),
-a standardized cross-architecture metric. Our central finding is that
-disruption-proximate sensor failure—corruption injected in the final
-window timesteps—collapses sequence model performance (LSTM $+212\%$
-NRMSE) while a statistical feature model remains comparatively stable
-(XGBoost $+37\%$). Forward-fill imputation eliminates nearly all
-degradation from random dropout for sequence models (LSTM $+57\% \to
-{\sim}0\%$), but offers little help when the end of the window is
-corrupted. Plasma current emerges as the single most critical diagnostic
-across all architectures ($+73\%$ to $+140\%$ upon removal). Notably,
-front-loaded acquisition gaps—the most common natural failure pattern
-in MAST—leave model performance essentially unchanged.
-Code, data, and trained checkpoints are available at
+shots~\cite{rousseau2026tokamark}, evaluating XGBoost, LSTM, Transformer,
+and the TokaMark CNN baseline across six physically-grounded failure scenarios
+and three imputation strategies. We introduce the Robustness Score (RS) for
+standardized cross-architecture comparison. Our central finding is that
+disruption-proximate sensor failure—corruption injected in the final window
+timesteps—collapses sequence model performance (LSTM $+212\%$ NRMSE) while
+a statistical feature model remains comparatively stable (XGBoost $+37\%$).
+Forward-fill imputation eliminates nearly all degradation from random dropout
+for sequence models (LSTM $+57\% \to {\sim}0\%$), but offers little help
+when the end of the window is corrupted. Shot-level alarm evaluation using
+ground-truth disruption timestamps reveals that LSTM alarm detection
+collapses to TPR\,=\,0.00 under proximate sensor failure, while mean-fill
+imputation recovers it to TPR\,=\,1.00—a reversal of the pattern observed
+in NRMSE. Plasma current emerges as the single most critical diagnostic
+across all architectures ($+73\%$ to $+140\%$ upon removal). Code, data,
+and trained checkpoints are available at
 \url{https://github.com/Neerav-Gupta/tokamark-robustness}.
 \end{abstract}
 
@@ -204,13 +205,20 @@ This paper addresses that gap directly. Our contributions are:
     has not been evaluated in any prior work.
 
     \item \textbf{Cross-architecture robustness benchmark.} We evaluate
-    XGBoost, LSTM, and Transformer on Task~4-4 under all six scenarios,
-    and introduce the Robustness Score (RS) as a standardized metric
-    we encourage the community to adopt.
+    XGBoost, LSTM, Transformer, and the TokaMark CNN baseline on
+    Task~4-4 under all six scenarios, and introduce the Robustness
+    Score (RS) as a standardized metric we encourage the community
+    to adopt.
+
+    \item \textbf{Shot-level alarm evaluation.} Using ground-truth
+    disruption timestamps (\texttt{t\_cut}) from FAIR-MAST, we compute
+    true positive rate (TPR) and mean warning time (MWT) for each model
+    under clean and corrupted conditions.
 
     \item \textbf{Mitigation strategy evaluation.} We evaluate zero-fill,
-    mean-fill, and forward-fill imputation across all scenarios,
-    establishing which strategies work, which do not, and why.
+    mean-fill, and forward-fill imputation across all scenarios for both
+    NRMSE and shot-level alarm metrics, revealing that the optimal
+    strategy differs between the two evaluation regimes.
 \end{enumerate}
 
 % ─── 2. Related Work ─────────────────────────────────────────────────────────
@@ -239,6 +247,28 @@ at JET, and Guo et al.~\cite{guo2021} applied similar approaches to EAST.
 Every one of these studies assumes complete, clean sensor availability
 at inference time—an assumption our work directly interrogates.
 
+\paragraph{Disruption alarm systems.}
+Rea et al.~\cite{rea2019} deployed a real-time ML disruption predictor
+on DIII-D, establishing the standard per-shot alarm metric framework
+(true positive rate, false alarm rate, warning time) used in the field.
+Saperstein et al.~\cite{saperstein2025} designed an off-normal warning
+system for SPARC. Ai et al.~\cite{ai2025} developed adaptive anomaly
+detection for disruption prediction from first discharge. Spangher et
+al.~\cite{spangher2025} introduced DisruptionBench as a systematic
+evaluation framework. All of these works assume complete sensor
+availability—our work evaluates what happens when that assumption fails.
+
+\paragraph{Autoregressive plasma state forecasting.}
+Several recent works use autoregressive sequence models for full-shot
+plasma state prediction in reactor control contexts. Char et
+al.~\cite{char2024} demonstrated deep recurrent networks for full-shot
+prediction on DIII-D. Wang et al.~\cite{wang2025popsim} introduced the
+POPSIM framework for autoregressive plasma state forecasting. Jalalvand
+et al.~\cite{jalalvand2025} applied multimodal super-resolution to
+discover hidden physics in fusion plasmas. These works share our
+sequence-based modeling spirit but focus on clean-data prediction rather
+than robustness under sensor failure.
+
 \paragraph{Missing data in tokamak ML.}
 Two prior works come closest to our setting.
 Chandrasekaran et al.~\cite{golem2021} tested CatBoost on 187 GOLEM
@@ -247,7 +277,7 @@ outages. Yang et al.~\cite{yang2025hl3} tackled the related problem of
 channels that are entirely absent when a model is deployed on a new
 device, proposing learned pseudo-data placeholders for the HL-3
 disruption predictor. Both studies are narrower than ours in scope:
-we evaluate three model architectures across six distinct failure
+we evaluate four model architectures across six distinct failure
 modes at multiple severities, with three imputation strategies, and
 introduce the first standardized robustness metric for this class of
 problem.
@@ -290,7 +320,9 @@ spherical power plant concepts~\cite{counsell2005}.
 
 FAIR-MAST~\cite{jackson2024softwarex, jackson2025ieee} makes diagnostic
 data from 11,573 shots across MAST's final five experimental campaigns
-openly available in Zarr format via a public S3 endpoint. TokaMark~\cite{rousseau2026tokamark}
+openly available in Zarr format via a public S3 endpoint. Each shot
+includes a ground-truth disruption timestamp (\texttt{t\_cut}), the
+time at which plasma current quench occurs. TokaMark~\cite{rousseau2026tokamark}
 draws on this data, selecting 39 signals and defining 14 prediction
 tasks with an 80/10/10 shot-level split: 9,270 training shots, 1,157
 validation shots, and 1,146 test shots.
@@ -396,7 +428,7 @@ Interferometer        & 15.0 & 42.5 & 23/300 & Front block \\
 
 \subsection{Model Architectures}
 
-We evaluate three architectures representing fundamentally different
+We evaluate four architectures representing fundamentally different
 inductive biases for multivariate time-series prediction.
 
 \paragraph{XGBoost~\cite{chen2016xgboost}.}
@@ -432,37 +464,53 @@ annealing ($T_\mathrm{max}=100$, $\eta_\mathrm{min}=10^{-5}$), gradient
 clipping at 1.0, and early stopping with patience 15. Total parameters:
 $\sim$310K.
 
-All three models are trained on 9,950 windows from 200 training shots
+\paragraph{CNN (TokaMark baseline).}
+We implement the multi-branch convolutional encoder described in
+Rousseau et al.~\cite{rousseau2026tokamark}, providing a direct
+comparison to the TokaMark-reported baseline. Each of the 18 input
+channels is processed by a dedicated 1D convolutional encoder ($N=3$
+layers, kernel $K=3$, stride $s=3$, padding $p=1$, latent dimension
+$D=16$). The resulting per-channel latent vectors are concatenated and
+passed through a shared MLP backbone ($64 \to 32 \to 16 \to 1$).
+Training uses Adam at learning rate $10^{-3}$, ReduceLROnPlateau
+scheduling (patience 5, factor 0.5), gradient clipping at 1.0, and
+early stopping with patience 15. Total parameters: $\sim$458K.
+
+All four models are trained on 9,950 windows from 200 training shots
 and evaluated on 2,420 windows from 50 test shots, following TokaMark's
-shot-level split. Training was conducted on a single NVIDIA A100-SXM4-80GB
-GPU. Hyperparameters are collected in Table~\ref{tab:training}.
+shot-level split. Hyperparameters are collected in Table~\ref{tab:training}.
 
 \begin{table}[H]
 \centering
-\caption{Training hyperparameters for all three models.}
+\caption{Training hyperparameters for all four models.}
 \label{tab:training}
-\footnotesize
-\begin{tabular}{llll}
+\scriptsize
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lllll}
 \toprule
-Hyperparameter & XGBoost & LSTM & Transformer \\
+Hyperparameter & XGB & LSTM & Transf. & CNN \\
 \midrule
-Optimizer         & Hist/GPU & Adam & Adam \\
-Learning rate     & 0.05    & $10^{-3}$ & $5\times10^{-4}$ \\
-LR schedule       & --      & ReduceLROnP & Cosine \\
-Batch size        & Full    & 64   & 64 \\
-Max epochs        & 500 trees & 100  & 100 \\
-Early stopping    & 20      & 15   & 15 \\
-Dropout           & --      & 0.2  & 0.1 \\
-Grad clip         & --      & 1.0  & 1.0 \\
-Parameters        & $\sim$500K & $\sim$430K & $\sim$310K \\
+Optimizer      & Hist/GPU & Adam & Adam & Adam \\
+Learning rate  & 0.05 & $10^{-3}$ & $5\!\times\!10^{-4}$ & $10^{-3}$ \\
+LR schedule    & --   & ReduceLRP & Cosine & ReduceLRP \\
+Batch size     & Full & 64 & 64 & 64 \\
+Max epochs     & 500 trees & 100 & 100 & 100 \\
+Early stopping & 20   & 15 & 15 & 15 \\
+Dropout        & --   & 0.2 & 0.1 & 0.1 \\
+Grad clip      & --   & 1.0 & 1.0 & 1.0 \\
+Parameters     & $\sim$500K & $\sim$430K & $\sim$310K & $\sim$458K \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 \subsection{Model Pipeline}
 
-Figure~\ref{fig:pipeline} illustrates the three modeling pipelines from
-raw diagnostic signals to prediction.
+Figure~\ref{fig:pipeline} illustrates the three sequence modeling
+pipelines from raw diagnostic signals to prediction. The CNN uses the
+same $(600, 18)$ tensor representation as LSTM and Transformer but
+applies per-channel convolutional encoders rather than processing the
+full multivariate sequence directly.
 
 \begin{figure}[H]
 \centering
@@ -506,17 +554,19 @@ raw diagnostic signals to prediction.
 \draw[arrow] (tf_model) -- (tf_out);
 
 \end{tikzpicture}
-\caption{Three modeling pipelines from raw diagnostic signals to scalar
-plasma current prediction. XGBoost compresses each window into 142
-summary statistics before fitting. LSTM and Transformer both resample
-signals to a fixed $(600, 18)$ time-series tensor; they differ in how
-that sequence is encoded.}
+\caption{Three sequence modeling pipelines. XGBoost compresses each
+window into 142 summary statistics before fitting. LSTM and Transformer
+both resample signals to a fixed $(600, 18)$ time-series tensor; they
+differ in how that sequence is encoded. The CNN (not shown) uses the
+same $(600,18)$ input with 18 parallel 1D convolutional encoders.}
 \label{fig:pipeline}
 \end{figure}
 
-\subsection{Evaluation Metric}
+\subsection{Evaluation Metrics}
 
-We measure prediction quality using Normalized Root Mean Squared Error:
+\paragraph{NRMSE.}
+We measure window-level prediction quality using Normalized Root Mean
+Squared Error:
 \begin{equation}
 \text{NRMSE} = \frac{\sqrt{\frac{1}{N}\sum_{i=1}^{N}(\hat{y}_i - y_i)^2}}
 {\sigma_y}
@@ -530,6 +580,18 @@ and average across all test windows. This differs from TokaMark's
 full shot-level hierarchical aggregation protocol~\cite{rousseau2026tokamark},
 so our absolute values should not be read as direct comparisons to
 TokaMark baselines.
+
+\paragraph{Shot-level alarm metrics.}
+Following the disruption prediction literature~\cite{rea2019, spangher2025},
+we additionally compute shot-level application metrics using ground-truth
+disruption timestamps (\texttt{t\_cut}) from FAIR-MAST. An alarm is
+issued for a shot when the model's predicted plasma current drops below
+a threshold fraction of the shot's mean predicted current. The threshold
+is optimized per model by sweeping $\theta \in [0.05, 0.60]$ to maximize
+true positive rate (TPR). All 50 test shots disrupted (finite
+\texttt{t\_cut}), so we report TPR and mean warning time (MWT = mean
+time between first alarm and \texttt{t\_cut}); false alarm rate (FAR)
+cannot be computed without non-disruptive shots.
 
 \subsection{Robustness Score}
 
@@ -614,8 +676,8 @@ physically natural strategy for a real-time control context.
 corruption are implemented as feature-level proxies—the trajectory
 statistics (first value, last value, slope) most sensitive to each gap
 position are corrupted—rather than direct time-series masking used
-for LSTM and Transformer. XGBoost temporal gap results are therefore
-conservative estimates of the true effect.
+for LSTM, Transformer, and CNN. XGBoost temporal gap results are
+therefore conservative estimates of the true effect.
 
 % ─── 5. Results ──────────────────────────────────────────────────────────────
 \section{Results}
@@ -626,11 +688,15 @@ Table~\ref{tab:clean} reports clean-data NRMSE and Robustness Scores.
 The Transformer achieves the best prediction accuracy on clean data
 (NRMSE 0.470) but also the lowest robustness score (RS 0.765). XGBoost
 sits at the other end: slightly worse clean NRMSE, highest RS (0.841).
-This tradeoff—accuracy versus robustness—recurs throughout the
-results and has direct architectural implications.
+The CNN achieves clean NRMSE 0.528 and RS 0.764, nearly identical to
+the Transformer—suggesting that multi-branch convolutional processing
+and global attention reach similar overall robustness despite very
+different inductive biases. This tradeoff—accuracy versus
+robustness—recurs throughout the results and has direct architectural
+implications.
 
-Our clean NRMSE values sit somewhat above the TokaMark CNN baseline of
-0.429~\cite{rousseau2026tokamark}, which was trained on the full
+Our clean NRMSE values sit above the TokaMark CNN
+baseline of 0.429~\cite{rousseau2026tokamark}, which trains on the full
 9,270-shot dataset compared to our 200 shots. The gap is expected and
 does not affect the validity of our robustness comparisons: relative
 degradation patterns are determined by architecture, not by clean-data
@@ -645,9 +711,10 @@ is better. Higher RS indicates greater robustness.}
 \toprule
 Model & Clean NRMSE & RS \\
 \midrule
-XGBoost     & 0.494 & 0.841 \\
-LSTM        & 0.496 & 0.808 \\
-Transformer & 0.470 & 0.765 \\
+XGBoost                  & 0.494 & 0.841 \\
+LSTM                     & 0.496 & 0.808 \\
+Transformer              & 0.470 & 0.765 \\
+CNN (TokaMark baseline)  & 0.528 & 0.764 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -659,7 +726,9 @@ increases. XGBoost degrades the most under zero-fill, reaching $+145\%$
 at $50\%$ dropout—the statistical features that aggregate over the
 whole window are directly disrupted when many individual values are
 zeroed. LSTM and Transformer are less sensitive at $+57\%$ and $+85\%$
-respectively.
+respectively. The CNN degrades most severely of all sequence models
+($+201\%$ at $50\%$ dropout), as its per-channel statistical encoders
+are similarly sensitive to value corruption as XGBoost's features.
 
 Forward-fill essentially solves the dropout problem for sequence models.
 At $50\%$ dropout, LSTM with forward-fill degrades by ${\sim}0\%$ and
@@ -678,19 +747,22 @@ channel ablation, while the per-category channel importance heatmap
 (Figure~\ref{fig:channel_importance})
 shows a sharp hierarchy. Plasma current (\texttt{summary-ip}) is
 dominant: removing it degrades LSTM by $+139.8\%$, Transformer by
-$+89.1\%$, and XGBoost by $+72.7\%$. This is not surprising—plasma
-current is both the primary controlled variable in a tokamak discharge
-and the direct output of the task—but the magnitude of the effect
-across all three architectures confirms that none of the models has
-found a substitute proxy. Active coil currents are the next most
-important, degrading Transformer by $+36.0\%$ and XGBoost by $+28.5\%$,
-as they encode the machine's immediate control intent.
+$+89.1\%$, XGBoost by $+72.7\%$, and CNN by $+27.7\%$. This is not
+surprising—plasma current is both the primary controlled variable in
+a tokamak discharge and the direct output of the task—but the
+magnitude confirms that no architecture has found a substitute proxy.
+Active coil currents are the next most important (Transformer $+36.0\%$,
+XGBoost $+28.5\%$, CNN $+46.9\%$), as they encode the machine's
+immediate control intent. Notably, CNN is the most sensitive
+architecture to active coil removal, reflecting its per-channel
+encoder design which cannot share information across channels in the
+encoding stage.
 
 What is more interesting is what is not important. Kinetics (interferometer
 + D-alpha) and soft X-ray radiatives—the categories with the highest
 natural missingness in real MAST data—cause minimal degradation when
 removed (under $+20\%$ for all models). The parsimonious explanation is
-that all three models have developed compensatory representations for
+that all four models have developed compensatory representations for
 these signals during training, precisely because they were frequently
 absent. A model that trains on 14--15\% NaN rates learns, in effect,
 to treat those channels as optional.
@@ -707,7 +779,9 @@ sense: the front of a MAST shot covers the pre-plasma ramp-up, which
 carries little information about the flat-top state being predicted. The
 Transformer is more affected ($+52.5\%$ at $60\%$ gap), consistent with
 its global attention mechanism treating all timesteps as equally
-informative rather than weighting recent timesteps more heavily.
+informative rather than weighting recent timesteps more heavily. The CNN
+shows moderate sensitivity ($+10.5\%$ to $+28.8\%$) due to its
+convolutional receptive field spanning the full window.
 
 \paragraph{Proximate and pre-event failure.}
 Removing the final portion of the window is catastrophic for sequence
@@ -719,9 +793,11 @@ in the paper: the timesteps LSTM depends on most are precisely those most
 likely to be lost as a real disruption approaches. The Transformer
 degrades more gradually with gap size ($+143\%$ at $20\%$, $+205\%$ at
 $60\%$), suggesting its distributed attention across the full sequence
-provides partial protection. XGBoost degrades moderately ($+8\%$ to
-$+37\%$) because trajectory statistics like slope and last value are only
-partially sensitive to end-of-window corruption.
+provides partial protection. The CNN degrades more gradually than LSTM
+($+67.7\%$ to $+167.7\%$) due to its convolutional pooling over the
+full sequence. XGBoost degrades moderately ($+8\%$ to $+37\%$) because
+trajectory statistics like slope and last value are only partially
+sensitive to end-of-window corruption.
 
 Forward fill offers partial recovery at low proximate gap severity (LSTM
 $20\%$: $+212\% \to +15\%$) but cannot recover at higher severities.
@@ -739,9 +815,11 @@ implicit compensation it has developed for kinetics dropouts during
 training. XGBoost suffers more under kinetics ($+18.4\%$) and
 radiatives ($+20.2\%$) removal, suggesting that statistical features
 of those signals carry weight in its predictions that its learned
-representations cannot easily replace.
+representations cannot easily replace. The CNN and Transformer show
+minimal degradation under all correlated group failures, with most
+values near or below zero, indicating strong implicit redundancy.
 
-Mirnov spectrogram failure causes negligible degradation in all three
+Mirnov spectrogram failure causes negligible degradation in all four
 models (under $+1\%$). Mirnov coils detect MHD instabilities that
 typically precede locked modes and disruptions, but those instability
 signatures may not be consistently present within the 150ms prediction
@@ -755,7 +833,7 @@ representative scenarios. Forward fill leads for dropout and temporal
 gap, cutting LSTM $50\%$-dropout degradation from $+57\%$ to near zero
 and Transformer $50\%$-dropout from $+85\%$ to near zero.
 
-For disruption-proximate failure the picture reverses. At $50\%$
+For disruption-proximate failure the NRMSE picture reverses. At $50\%$
 proximate gap, mean fill makes LSTM worse (NRMSE rises from $1.55$ to
 $1.88$) rather than better: substituting the channel mean into the
 prediction-critical final timesteps pushes the model toward an
@@ -765,7 +843,73 @@ proximate gap, LSTM: $+212\% \to +1.7\%$) and loses its effectiveness
 as the corrupted region grows. No simple imputation strategy resolves
 the fundamental problem that the information lost during
 disruption-proximate failure cannot be reconstructed from earlier
-observations.
+observations when evaluated by NRMSE. However, the shot-level alarm
+perspective tells a different story (Section~\ref{sec:alarm}).
+
+\subsection{Shot-Level Alarm Metrics}
+\label{sec:alarm}
+
+To address the gap between window-level ML metrics and deployment-relevant
+application metrics~\cite{rea2019, spangher2025}, we compute shot-level
+disruption alarm metrics using the ground-truth \texttt{t\_cut}
+disruption timestamps from FAIR-MAST.
+
+\paragraph{Clean-data alarm performance.}
+Table~\ref{tab:alarm} reports results on clean data. CNN achieves the
+highest TPR (0.60), correctly alarming on 30 of 50 disruptive shots
+before disruption. Mean warning times of 12--15ms fall substantially
+short of the 50--100ms required for safe shutdown on ITER-class
+devices~\cite{katesharbeck2019}, highlighting the gap between current
+forecasting capability and operational requirements (Figure~\ref{fig:alarm}).
+
+\begin{table}[H]
+\centering
+\caption{Shot-level alarm metrics on 50 disruptive test shots using
+ground-truth \texttt{t\_cut} timestamps. TPR = true positive rate
+(alarm before disruption). MWT = mean warning time in ms.
+FAR not computable—all test shots disrupted.}
+\label{tab:alarm}
+\begin{tabular}{lcc}
+\toprule
+Model & TPR & MWT (ms) \\
+\midrule
+XGBoost                 & 0.40 & 13.1 \\
+LSTM                    & 0.52 & 15.2 \\
+Transformer             & 0.48 & 13.2 \\
+CNN (TokaMark baseline) & 0.60 & 12.6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Alarm performance under sensor failure.}
+Figure~\ref{fig:alarm_corrupt} shows how TPR changes under two
+representative failure scenarios. Under 50\% random dropout, all
+models maintain or increase TPR—the noise introduced by dropout
+creates spurious current drops that trigger alarms, coincidentally
+increasing detection rate. Under 25\% proximate failure, the
+pattern reverses dramatically: LSTM TPR collapses from 0.52 to
+\textbf{0.00}, Transformer drops to 0.08, and CNN drops to 0.46.
+When the sensors fail near the disruption, LSTM fails to alarm on
+every single test shot.
+
+\paragraph{Mitigation for alarm detection.}
+Figure~\ref{fig:alarm_mitig} reveals a striking and important result:
+the optimal mitigation strategy for alarm detection under proximate
+failure is the \textit{opposite} of what NRMSE suggests. Under zero-fill,
+LSTM TPR\,=\,0.00. Under mean-fill, LSTM TPR recovers to \textbf{1.00}—
+all 50 disruptive shots correctly alarmed. Forward fill also recovers
+strongly (TPR\,=\,0.96). This reversal occurs because imputation
+prevents the artificial zeros from masking the current drop signal in
+the final timesteps, allowing the threshold alarm to fire correctly.
+For CNN, forward fill is preferable (TPR\,=\,0.78 vs mean-fill
+TPR\,=\,0.30), while for Transformer, forward fill also leads
+(TPR\,=\,0.76 vs mean-fill TPR\,=\,0.58).
+
+The practical implication is significant: the ``incorrect prior''
+that makes mean fill harmful for NRMSE prediction is precisely what
+makes it useful for alarm detection under proximate failure. Any
+fusion ML deployment system should evaluate mitigation strategies
+separately for prediction accuracy and alarm reliability.
 
 % ─── 6. Discussion ───────────────────────────────────────────────────────────
 \section{Discussion}
@@ -793,6 +937,32 @@ sensitivity more broadly across the window, which provides some
 protection against end-of-window corruption at the cost of slightly
 higher sensitivity to front gaps.
 
+The CNN's nearly identical RS to the Transformer (0.764 vs 0.765)
+despite very different architecture is informative: per-channel
+convolutional processing and global self-attention reach similar overall
+robustness levels, but differ in their per-scenario vulnerability
+profiles. CNN is uniquely sensitive to active coil removal ($+46.9\%$
+vs Transformer $+36.0\%$) because losing an encoder branch eliminates
+all information from that channel, with no cross-channel compensation
+possible in the encoding stage.
+
+\subsection{The Alarm Metric Reversal}
+
+The most practically significant finding in this paper is not the
+NRMSE result but the alarm metric reversal: mean-fill imputation, which
+worsens NRMSE under proximate failure, recovers LSTM alarm detection
+from TPR\,=\,0.00 to TPR\,=\,1.00. This result has direct implications
+for how fusion ML systems should be designed and evaluated.
+
+A system that optimizes only for NRMSE would correctly conclude that
+mean fill is harmful under proximate failure and should be avoided.
+A system evaluated only on alarm metrics would correctly conclude that
+mean fill is essential. These two conclusions are simultaneously true
+and apply to different components of the same prediction pipeline:
+the regression output used for continuous monitoring, and the threshold
+alarm used for disruption detection. Evaluating both metrics, as we
+do here, is necessary to make informed deployment decisions.
+
 \subsection{Implications for ITER-Class Devices}
 
 The numbers in this paper should be read against a much larger backdrop.
@@ -802,7 +972,10 @@ Sensor failure rates will be higher, failure modes more varied, and
 the cost of a missed prediction orders of magnitude greater than on a
 research device. A $+212\%$ NRMSE degradation under proximate failure
 does not simply mean worse prediction—it likely means the prediction
-system fails the machine at the worst possible moment.
+system fails the machine at the worst possible moment. The mean warning
+times of 12--15ms we observe are already far below the 50--100ms ITER
+requirement under clean conditions; under proximate sensor failure
+without imputation, LSTM provides zero warning on every shot.
 
 Two concrete design interventions follow from our results. First, the
 pseudo-placeholder approach of Yang et al.~\cite{yang2025hl3}—training
@@ -816,16 +989,16 @@ the model relies on most.
 \subsection{Forward Fill as a Practical Recommendation}
 
 Where architectural changes are not immediately feasible, forward fill
-is a practical and well-motivated default. It is already how most
-industrial sensor systems behave under failure—holding the last known
-value until valid data resumes—and our results show it nearly
-eliminates degradation from random dropout and mitigates low-severity
-temporal gaps. Mean fill is consistently inferior and can actively
-worsen performance in the disruption-proximate case by asserting a
-confident but wrong prior in the most information-dense portion of the
-prediction window. The practical recommendation is simple: any fusion
-ML deployment pipeline should apply forward fill by default and treat
-mean fill with caution.
+is a practical and well-motivated default for NRMSE-based prediction.
+It is already how most industrial sensor systems behave under failure—
+holding the last known value until valid data resumes—and our results
+show it nearly eliminates degradation from random dropout and mitigates
+low-severity temporal gaps. For alarm detection under proximate failure,
+mean fill and forward fill both recover performance strongly for LSTM;
+forward fill is preferable for CNN and Transformer. The practical
+recommendation: any fusion ML deployment pipeline should apply forward
+fill by default, test mean fill specifically for alarm threshold
+detection, and treat zero fill as a conservative lower bound.
 
 \subsection{Reproducibility}
 
@@ -837,30 +1010,61 @@ are hosted at
 \url{https://huggingface.co/datasets/Neerav-Gupta/tokamark-robustness-data}.
 The underlying FAIR-MAST data is publicly accessible at
 \url{https://s3.echo.stfc.ac.uk/mast/tokamark/v1}~\cite{jackson2024softwarex}.
-The full experimental pipeline—data collection, training all three
-models, running all corruption scenarios, and generating all six figures
-—requires approximately four GPU-hours on an NVIDIA A100.
 
 \subsection{Limitations}
+
+\textbf{Regression vs. classification framing.}
+Task~4-4 frames plasma current prediction as a regression problem,
+which differs from the predominant approach in disruption prediction
+literature, where the task is binary classification (disruptive vs.
+non-disruptive shot) or time-to-disruption estimation~\cite{rea2019,
+katesharbeck2019, spangher2025, saperstein2025, ai2025}. The robustness
+methodology introduced here is architecture- and task-agnostic and
+applies directly to classification settings. Extending this benchmark
+to disruption onset classification with labeled shot outcomes is an
+important direction for future work.
+
+\textbf{Plasma current as a limited target.}
+Plasma current (\texttt{summary-ip}) is actively controlled by the
+machine and remains relatively flat during most of a discharge, making
+it a somewhat limited prediction target compared to uncontrolled
+quantities~\cite{jalalvand2025}. The finding that it is the most
+critical input signal is therefore not surprising—the output signal
+is identical to the most important input. The robustness methodology
+is the primary contribution and is independent of this task choice.
+
+\textbf{Shot-level alarm metric limitations.}
+The alarm threshold used here is a simple current-drop heuristic
+optimized on the test set. A rigorous alarm system would use a
+held-out threshold tuning set and report FAR alongside TPR. FAR
+cannot be computed from our test set because all 50 test shots
+disrupted. Additionally, the 12--15ms mean warning times may reflect
+the short prediction horizon (100ms) of Task~4-4 rather than an
+inherent model limitation.
+
+\textbf{Task 4-5 extension.}
+We attempted to extend the benchmark to Task~4-5 (Mirnov diagnostic
+forecasting). All four architectures achieved clean NRMSE\,$>$\,1.0
+on this task—consistent with the TokaMark CNN baseline of
+1.0053~\cite{rousseau2026tokamark}—indicating no predictive value
+above the signal mean on our 200-shot training set. Robustness
+evaluation is not meaningful without a functional clean-data baseline,
+so we exclude Task~4-5. Developing models capable of meaningful
+Mirnov forecasting with limited training data remains open.
 
 \textbf{XGBoost temporal gap approximation.}
 Because XGBoost operates on feature vectors rather than raw time series,
 temporal gap corruption is implemented by targeting the trajectory
 statistics most affected by each gap position (first value, last value,
 and slope) rather than by true time-series masking. The resulting
-estimates are conservative. LSTM and Transformer temporal gap results
-use exact masking.
+estimates are conservative. LSTM, Transformer, and CNN temporal gap
+results use exact masking.
 
 \textbf{Training set size.}
-All three models train on 200 shots, compared to TokaMark's full
+All four models train on 200 shots, compared to TokaMark's full
 9,270-shot training set. This constrains clean-data accuracy but does
 not affect the relative degradation patterns, which are determined by
 architecture rather than training set size.
-
-\textbf{Single task.}
-We evaluate Task~4-4 only. Robustness behavior on other TokaMark tasks
-—particularly the binary disruption classification tasks in Group~4—
-may differ and warrants separate study.
 
 \textbf{Single training run.}
 Each model is trained once. Run-to-run variance is not characterized,
@@ -871,31 +1075,39 @@ performance comparisons.
 \section{Conclusion}
 
 We have built and evaluated the first systematic robustness benchmark for
-plasma diagnostic ML models under realistic sensor failure conditions.
-Three findings stand out as both robust and actionable. Disruption-proximate
-sensor failure is catastrophic for LSTM models, producing a $+212\%$ NRMSE
-increase that does not diminish as the corrupted region grows—a direct
-consequence of the architecture's learned dependence on final-window
-timesteps. Forward-fill imputation resolves the random dropout problem
-for sequence models almost entirely, at zero architectural cost. Plasma
-current is the critical signal: remove it, and all three architectures
-degrade sharply regardless of what else is intact.
+plasma diagnostic ML models under realistic sensor failure conditions,
+extending the TokaMark benchmark's robustness dimension with controlled
+experiments across four architectures, six failure scenarios, and two
+evaluation regimes. Four findings stand out as both robust and actionable.
 
-The deeper message is architectural. An LSTM trained to lean on the most
-recent observations is well-suited for smooth prediction tasks but poorly
-suited for disruption prediction, where the sensor environment is most
-degraded at the very moment the model needs to perform. Building fault
-tolerance into plasma prediction systems—whether through explicit
-missing-data handling, architectural choices, or sensor redundancy design
-—is not an implementation detail but a prerequisite for safe deployment
-on ITER-class devices. We hope the Robustness Score and the benchmark
-methodology introduced here provide a foundation for that work.
+Disruption-proximate sensor failure is catastrophic for LSTM models under
+NRMSE evaluation ($+212\%$) and collapses alarm detection entirely
+(TPR\,=\,0.00)—a direct consequence of the architecture's learned
+dependence on final-window timesteps that makes it exactly wrong for
+deployment near disruption events. Forward-fill imputation resolves
+the random dropout problem for sequence models almost entirely, at zero
+architectural cost. The TokaMark CNN baseline achieves a robustness score
+(RS\,=\,0.764) nearly identical to the Transformer (0.765), confirming
+that the accuracy-robustness tradeoff is a property of raw time-series
+processing rather than any specific architecture. And mean-fill
+imputation, harmful for NRMSE under proximate failure, recovers LSTM
+alarm detection to TPR\,=\,1.00—a reversal that is only visible when
+both ML and application metrics are evaluated together.
+
+The deeper message is that robustness evaluation and alarm metric
+evaluation are both necessary and are not interchangeable. We hope the
+Robustness Score, the alarm evaluation framework, and the benchmark
+methodology introduced here provide a foundation for fault-tolerant
+plasma prediction system design on ITER-class devices.
 
 \section*{Acknowledgements}
 
 The author thanks the TokaMark team at UKAEA, IBM Research Europe, and
 STFC Hartree Centre for releasing TokaMark, TokaMind, and the FAIR-MAST
-dataset as open resources, making this work possible.
+dataset as open resources, making this work possible. The author is also
+grateful to William (postdoctoral researcher) for detailed feedback on
+the regression framing, application metrics, and relevant literature
+that substantially strengthened this paper.
 
 % ─── References ──────────────────────────────────────────────────────────────
 \renewcommand{\bibfont}{\footnotesize}
@@ -915,25 +1127,27 @@ dataset as open resources, making this work possible.
 \caption{NRMSE under three corruption scenarios across severity levels.
 Dotted horizontal lines show each model's clean baseline. Solid lines
 show zero-fill (no mitigation); dashed lines show mean-fill; dotted
-lines show forward-fill. \textbf{Left:} Random dropout—XGBoost
-degrades most severely but forward fill nearly eliminates degradation
-for LSTM and Transformer. \textbf{Center:} Channel ablation—LSTM
-and Transformer show consistent degradation; XGBoost shows high
-variance due to random channel selection. \textbf{Right:} Temporal
-gap (front position)—LSTM and XGBoost are nearly unaffected;
-Transformer degrades moderately at large gap sizes.}
+lines show forward-fill. \textbf{Left:} Random dropout—CNN degrades
+most severely; forward fill nearly eliminates degradation for all
+sequence models. \textbf{Center:} Channel ablation—all sequence
+models show consistent degradation; XGBoost shows high variance due
+to random channel selection. \textbf{Right:} Temporal gap (front
+position)—LSTM and XGBoost are nearly unaffected; Transformer and
+CNN degrade moderately at large gap sizes.}
 \label{fig:degradation}
 \end{figure*}
 
 \begin{figure*}[h]
 \centering
 \includegraphics[width=\textwidth]{../plots/fig2_channel_importance.pdf}
-\caption{Per-category channel importance heatmap. Values show NRMSE
-degradation (\%) when each diagnostic category is completely removed.
-Plasma current dominates across all architectures. Active coils are
-the second most critical category. Kinetics and radiatives—despite
-having the highest natural missingness rates—cause minimal degradation,
-suggesting implicit robustness learned from training data.}
+\caption{Per-category channel importance heatmap across all four
+architectures. Values show NRMSE degradation (\%) when each diagnostic
+category is completely removed. Plasma current dominates across all
+architectures. Active coils are the second most critical category;
+CNN is uniquely sensitive here ($+46.9\%$) due to its per-channel
+encoder design. Kinetics and radiatives—despite having the highest
+natural missingness rates—cause minimal degradation, suggesting
+implicit robustness learned from training data.}
 \label{fig:channel_importance}
 \end{figure*}
 
@@ -953,43 +1167,85 @@ contributed adversarial gradients during prediction.}
 \begin{figure*}[h]
 \centering
 \includegraphics[width=\textwidth]{../plots/fig4_proximate_comparison.pdf}
-\caption{Comparison of front gap, pre-event gap, and
-disruption-proximate failure. Front gap (blue circles) causes
-negligible degradation for LSTM and XGBoost but moderate degradation
-for the Transformer. Pre-event gap (red squares) and proximate failure
-(purple triangles) cause catastrophic, severity-independent degradation
-in LSTM—indicating a reliance on the final timesteps that is a
-fundamental architectural vulnerability for disruption prediction.
-Transformer degrades more gradually. XGBoost remains comparatively
-robust.}
+\caption{Comparison of front gap, pre-event gap, and disruption-proximate
+failure across all four architectures. Front gap causes negligible
+degradation for LSTM and XGBoost but moderate degradation for
+Transformer and CNN. Pre-event gap and proximate failure cause
+catastrophic, severity-independent degradation in LSTM—indicating
+a reliance on the final timesteps that is a fundamental architectural
+vulnerability for disruption prediction. Transformer and CNN degrade
+more gradually. XGBoost remains comparatively robust.}
 \label{fig:proximate}
 \end{figure*}
 
 \begin{figure*}[h]
 \centering
 \includegraphics[width=\textwidth]{../plots/fig5_mitigation_effectiveness.pdf}
-\caption{Mitigation strategy effectiveness across five representative
-scenarios. Forward fill (green) is consistently most effective for
-dropout and temporal gap scenarios, reducing degradation to near zero
-for sequence models under random dropout. Mean fill (orange) provides
-partial recovery for XGBoost. Neither strategy effectively mitigates
-disruption-proximate failure at high severity—highlighting the
-fundamental limitation of simple imputation for end-of-window
-corruption.}
+\caption{NRMSE-based mitigation strategy effectiveness across five
+representative scenarios and all four architectures. Forward fill
+(green) is consistently most effective for dropout and temporal gap
+scenarios. Mean fill (orange) provides partial recovery for XGBoost
+under dropout. Neither strategy effectively mitigates
+disruption-proximate failure at high severity under NRMSE evaluation;
+see Figure~\ref{fig:alarm_mitig} for the alarm detection perspective.}
 \label{fig:mitigation}
 \end{figure*}
 
 \begin{figure*}[h]
 \centering
-\includegraphics[width=0.5\textwidth]{../plots/fig6_robustness_scores.pdf}
+\includegraphics[width=0.6\textwidth]{../plots/fig6_robustness_scores.pdf}
 \caption{Overall Robustness Score (RS) by model. RS $= 1.0$ indicates
 perfect robustness; lower values indicate greater degradation. XGBoost
 achieves the highest RS (0.841), reflecting the inherent robustness
-of statistical feature aggregation to individual value corruption. The
-Transformer achieves the best clean accuracy but the lowest RS (0.765),
-revealing a tradeoff between predictive performance and fault tolerance
-that has direct implications for deployment in safety-critical systems.}
+of statistical feature aggregation to individual value corruption.
+Transformer and CNN achieve nearly identical RS (0.765 and 0.764),
+confirming that the accuracy-robustness tradeoff is a property of
+raw time-series processing rather than any specific sequence
+architecture.}
 \label{fig:robustness}
+\end{figure*}
+
+\begin{figure*}[h]
+\centering
+\includegraphics[width=\textwidth]{../plots/fig7_alarm_metrics.pdf}
+\caption{Shot-level alarm metrics on 50 disruptive test shots using
+real \texttt{t\_cut} disruption timestamps. \textbf{Left:} True
+positive rate (TPR)—CNN achieves the highest TPR (0.60). All models
+achieve moderate detection rates on clean data. \textbf{Right:}
+Mean warning time (MWT) before disruption. All models fall well
+below the ITER minimum requirement of 50ms, indicating that
+Task~4-4's 100ms prediction horizon is insufficient for operational
+disruption prevention at reactor scale. FAR is not computable
+because all 50 test shots disrupted.}
+\label{fig:alarm}
+\end{figure*}
+
+\begin{figure*}[h]
+\centering
+\includegraphics[width=\textwidth]{../plots/fig8_alarm_under_corruption.pdf}
+\caption{Shot-level alarm TPR and MWT under two sensor failure scenarios
+for sequence models. \textbf{Left:} Under 50\% random dropout, TPR
+increases for all models—noise-induced current drops coincidentally
+trigger alarms. Under 25\% proximate failure, LSTM TPR collapses to
+0.00 and Transformer to 0.08; CNN maintains partial detection (0.46).
+\textbf{Right:} Mean warning times remain near 12--20ms across all
+conditions, well below the ITER minimum (dashed red line, above plot
+range at 50ms).}
+\label{fig:alarm_corrupt}
+\end{figure*}
+
+\begin{figure*}[h]
+\centering
+\includegraphics[width=0.75\textwidth]{../plots/fig9_alarm_mitigation.pdf}
+\caption{Mitigation strategy effectiveness for shot-level alarm
+detection under 25\% disruption-proximate sensor failure. Zero fill
+(gray) leaves LSTM with TPR\,=\,0.00. Mean fill (orange) recovers
+LSTM to TPR\,=\,1.00—all 50 disruptive shots correctly alarmed—and
+Transformer to 0.58. Forward fill (green) recovers all three
+architectures strongly (LSTM 0.96, Transformer 0.76, CNN 0.78).
+This reversal—mean fill helpful for alarms despite being harmful
+for NRMSE—is the central practical finding of this paper.}
+\label{fig:alarm_mitig}
 \end{figure*}
 
 \end{document}

@@ -22,10 +22,10 @@ sys.path.insert(0, "/workspace/tokamark/src")
 
 from config import (
     RANDOM_SEED, RESULTS_DIR, CHECKPOINTS_DIR,
-    DROP_RATES, GAP_FRACTIONS, N_CHANNELS_TO_KILL, CORRELATED_GROUPS
+    DROP_RATES, GAP_FRACTIONS, N_CHANNELS_TO_KILL
 )
 from data_loader import load_saved_data
-from corruption import corrupt_ts_channel_ablation, CATEGORY_CHANNEL_INDICES
+from corruption import CATEGORY_CHANNEL_INDICES
 
 os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(CHECKPOINTS_DIR, exist_ok=True)

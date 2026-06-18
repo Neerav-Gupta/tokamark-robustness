@@ -19,10 +19,9 @@ import torch
 sys.path.insert(0, '/workspace/tokamark/src')
 sys.path.insert(0, '/workspace/fusion_research/scripts')
 
-from train_lstm import PlasmaLSTM, nrmse
+from train_lstm import PlasmaLSTM
 from train_transformer import PlasmaTransformer
 from train_cnn_baseline import PlasmaCNN
-import pickle as pkl
 
 DATA_DIR   = '/workspace/fusion_research/data'
 CKPT_DIR   = '/workspace/fusion_research/checkpoints'
@@ -64,8 +63,7 @@ def predict_batch(model, X):
     return np.array(preds)
 
 
-def compute_metrics_for_model(model_name, model, samples,
-                               X_test_ts, y_test):
+def compute_metrics_for_model(model_name, model, samples, X_test_ts):
     """
     Group windows by shot, run predictions, sweep alarm threshold,
     compute TPR and mean warning time.
@@ -159,7 +157,6 @@ if __name__ == '__main__':
     with open(f'{DATA_DIR}/test_raw_samples.pkl', 'rb') as f:
         samples = pickle.load(f)
     X_test_ts = np.load(f'{DATA_DIR}/test_X_ts.npy')
-    y_test    = np.load(f'{DATA_DIR}/test_y.npy')
     print(f'Samples: {len(samples)}, X_ts: {X_test_ts.shape}')
 
     all_metrics = {}
@@ -171,7 +168,7 @@ if __name__ == '__main__':
         if model is None:
             continue
         metrics = compute_metrics_for_model(
-            name, model, samples, X_test_ts, y_test)
+            name, model, samples, X_test_ts)
         all_metrics[name] = metrics
         print(f'  TPR: {metrics["tpr"]:.3f}  '
               f'MWT: {metrics["mwt"]:.1f}ms  '
@@ -182,9 +179,9 @@ if __name__ == '__main__':
     xgb_path = os.path.join(CKPT_DIR, 'xgboost_clean.pkl')
     if os.path.exists(xgb_path):
         with open(xgb_path, 'rb') as f:
-            xgb_model = pkl.load(f)
+            xgb_model = pickle.load(f)
         metrics = compute_metrics_for_model(
-            'xgboost', xgb_model, samples, X_test_ts, y_test)
+            'xgboost', xgb_model, samples, X_test_ts)
         all_metrics['xgboost'] = metrics
         print(f'  TPR: {metrics["tpr"]:.3f}  '
               f'MWT: {metrics["mwt"]:.1f}ms  '
