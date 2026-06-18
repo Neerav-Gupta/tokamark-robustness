@@ -1,0 +1,53 @@
+{
+  "lstm": {
+    "clean": {
+      "tpr": 0.52,
+      "mean_warning_time_ms": 15.161538461537024,
+      "threshold": 0.05
+    },
+    "dropout_50pct": {
+      "tpr": 0.9,
+      "mean_warning_time_ms": 16.555555555553028,
+      "threshold": 0.05
+    },
+    "proximate_25pct": {
+      "tpr": 0.0,
+      "mean_warning_time_ms": null,
+      "threshold": 0.0
+    }
+  },
+  "transformer": {
+    "clean": {
+      "tpr": 0.48,
+      "mean_warning_time_ms": 13.15833333333166,
+      "threshold": 0.05
+    },
+    "dropout_50pct": {
+      "tpr": 0.64,
+      "mean_warning_time_ms": 13.449999999998163,
+      "threshold": 0.05
+    },
+    "proximate_25pct": {
+      "tpr": 0.08,
+      "mean_warning_time_ms": 19.199999999994645,
+      "threshold": 0.05
+    }
+  },
+  "cnn": {
+    "clean": {
+      "tpr": 0.6,
+      "mean_warning_time_ms": 12.566666666664979,
+      "threshold": 0.05
+    },
+    "dropout_50pct": {
+      "tpr": 0.98,
+      "mean_warning_time_ms": 17.853061224487398,
+      "threshold": 0.05
+    },
+    "proximate_25pct": {
+      "tpr": 0.46,
+      "mean_warning_time_ms": 14.243478260867695,
+      "threshold": 0.05
+    }
+  }
+}

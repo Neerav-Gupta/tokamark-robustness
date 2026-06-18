@@ -1,0 +1,26 @@
+{
+  "lstm": {
+    "tpr": 0.52,
+    "mean_warning_time_ms": 15.161538461537024,
+    "threshold": 0.05,
+    "note": "FAR not computable \u2014 all test shots disruptive"
+  },
+  "transformer": {
+    "tpr": 0.48,
+    "mean_warning_time_ms": 13.15833333333166,
+    "threshold": 0.05,
+    "note": "FAR not computable \u2014 all test shots disruptive"
+  },
+  "cnn": {
+    "tpr": 0.6,
+    "mean_warning_time_ms": 12.566666666664979,
+    "threshold": 0.05,
+    "note": "FAR not computable \u2014 all test shots disruptive"
+  },
+  "xgboost": {
+    "tpr": 0.4,
+    "mean_warning_time_ms": 13.149999999998855,
+    "threshold": 0.05,
+    "note": "FAR not computable \u2014 all test shots disruptive"
+  }
+}
